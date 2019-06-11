@@ -19,7 +19,7 @@ AWS 서버리스 서비스를 이용한 웹 애플리케이션 구축하기 Hand
 해당 실습은 3시간 기준으로 비용을 예측합니다. 프리티어 기준으로 비용이 발생하지 않는 범위내에서 실습을 진행할 수 있습니다.
 마지막 도전과제 수행시 CodePipeline이 증가하면서 비용이 발생할 수 있는 부분이 있으므로 실습 후 리소스를 반드시 삭제해야 합니다.
 
-<style>
+<style --type="text/css">
 .ImportedHTMLTable table td {
     font-size: 10px !important;
 }
@@ -78,3 +78,6 @@ Lab1은 Cloud9 IDE를 이용하여 서버리스 웹 애플리케이션을 구축
 2. **Create environment**버튼을 클릭하여 Cloud9 환경을 생성합니다.
 ![](images/002_Cloud9_Create_environment.png)
 3. Cloud9 이름을 **NewsWebApp**이라고 생성합니다. 설명(**News Web Application using Serverless Service**은 옵션이기 때문에 넣지 않아도 됩니다.
+![](images/003_Cloud9_Naming.png)
+4. Cloud9의 환경설정을 합니다. 개발환경은  **EC2 인스턴스**로 선택하고 인스턴스 타입은  t2.micro  를 선택합니다. 프리티어로 사용할 수 있습니다. Cloud9 IDE를 30분간 사용하지 않으면, 자동으로 EC2 인스턴스가 Stop 되어 비용을 절감할 수 있는 옵션을 기본적으로 제공합니다
+![](004_Cloud9_Configure.png)
