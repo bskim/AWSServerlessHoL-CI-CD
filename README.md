@@ -905,3 +905,360 @@ Outputs:
    2. Cloud9 IDE에서 배포한 Stack: Cloud9-WebApp (만약 S3 버킷에 파일이 있을 경우, 삭제가 실패될 수 있습니다. S3 버킷을 Empty하시고 다시 삭제를 시도합니다.)
    3. Cloud9 서비스로 이동한 후 해당 Cloud9을 삭제합니다.: aws-cloud9-NewWepApp 
 2. 삭제시 S3 버킷에 파일이 있을 경우, 삭제가 안될 수 있습니다. 관리 콘솔에서 S3 서비스로 이동한 다음 관련 버킷을 직접 삭제하시면 됩니다.
+
+### Lab2. CodeStar를 이용한 서버리스 서비스 CICD 배포 프로세스 이해 ### 
+Lab1에서 SAM을 구성하는 방법을 배웠습니다. Lab2에서는 서버리스 서비스의 CICD 배포 프로세스를 이해하는 실습입니다. CodeStar를 이용하여 서버리스 서비스를 하나 배포합니다. CodeStar는 소스 리포지토리인 CodeCommit, 소스를 빌드하고 단위테스트를 지원하는 CodeBuild, 서버리스 서비스를 배포하기 위한 CloudFormation을 지원하고 있으며, SAM에서 CodeDeploy 를 지원하기 위해서 SAM 안에 간단한 설정만으로 Canary 배포 환경을 구축할 수 있습니다. CodeStar는 위에서 언급한 Code 시리즈 서비스를 CodePipeline에 의해서 하나의 CI/CD 배포 프로세스를 자동으로 구성합니다. IDE는 Cloud9을 선택할 수 있으며, Cloud9이 배포가 완료되면 자동으로 CodeCommit에 배포된 blueprint가 clone 되는 것을 스크립트로 확인할 수 있습니다.
+
+Lab2에서는 서버리스 서비스의 CICD 배포 프로세스 이해를 위해서 단위 테스트를 적용해서 CodeBuild에서 테스틑 하는 방법과 Canary 배포하는 방법, 그리고 Lambda 함수를 이전에 배포한 버전으로 Rollback 하는 방법을 살펴 봅니다.
+
+참고: Lab2는 Change a Serverless Project to Shift Traffic Between AWS Lambda Function Versions을 참고하여 작성되었으며, 추가 작업을 포함했습니다. 다양하게 응용하여 테스트 할 수 있습니다.
+
+#### 1. CodeStar 생성 ###
+1. AWS 관리 콘솔에서 **CodeStar** 서비스로 이동합니다.
+![](images/200_CodeStar_Service.png)
+
+2. **Start a Project** 버튼을 클릭합니다.
+![](images/201_CodeStar_Create.png)
+3. 런타임은  **Python** 을 선택하고, AWS Services는  **AWS Lambda** 를 선택합니다. Project Template에서  **Web service** 를 선택합니다.
+![](images/202_CodeStar_Python_Lambda_Web.png)
+
+4. Project name은  **WebAppCodeStar** 라고 입력합니다. 코드 리포지토리는  **CodeCommit**  을 사용하고, 리포지토리 이름도 동일하게  **WebAppCodeStar** 로 입력하고,  **Next** 버튼을 클릭합니다.
+![](images/203_CodeStar_CodeCommit.png)
+
+5. CodeStar는  **CodePipeline**을 프로젝트 내에 포함할 수 있고, 자동으로 해당 서비스와 연결시켜 줍니다. 서비스 구성도를 확인하고  **Create Project** 버튼을 클릭합니다.
+![](images/204_CodeStar_CodePipeline.png)
+
+6. 코드를 수정하기 위한 환경을 선택할 수 있습니다. AWS가 제공하는 Cloud9을 사용할 수 있으며, 그 외에도 CLI, Eclipse, Visual Studio 통합 IDE와 함께 사용할 수 있습니다. 여기서는  **AWS Cloud9** 을 IDE로 선택하고,  **Next** 버튼을 클릭합니다.
+![](images/205_CodeStar_Cloud9.png)
+
+7. AWS Cloud9에 사용할 EC2 인스턴스 타입은 프리티어를 지원하는  **t2.micro** 를 선택하고,  **Next** 버튼을 클릭합니다.
+![](images/206_CodeStar_Cloud9_Type.png)
+
+8. AWS Cloud9 IDE 까지 선택이 종료되면, 코딩을 위한 단계는 Cloud9이 런칭 되기까지 잠시 기다려야 합니다. 따라서, CodeStar의 대쉬보드 화면으로 이동합니다.
+![](images/206_CodeStar_Dashboard.png) 
+   1. IDE로 접근할 수 있습니다. 여기서는 Cloud9 IDE로 접속합니다.
+   2. Code는 코드 리포지토리를 의미합니다. CodeCommit으로 이동하여 소스코드 또는 히스토리를 확인할 수 있습니다.
+   3. Build는 CodeBuild를 통해서 Build가 이루어진 히스토리를 확인할 수가 있습니다.
+   4. Pipeline은 CICD가 어떻게 구성되어져 있고 현재 동작중인지 실시간으로 확인이 가능합니다. CodePipeline으로 이동합니다.
+   5. Commit 히스토리는 최근 CodeCommit에서 발생한 Checkin(Push)에 대해서 히스토리를 제공합니다.
+   6. CICD를 나타내는 CodePipeline 시각화 툴이 대쉬보드에 추가됩니다. 각각의 패널은 드래그앤 드랍을 이용해서 원하는 형태로 재배치 할 수 있습니다.
+
+9. 일정 시간이 지나면 Cloud9이 기동되는 것을 확인할 수 있습니다. 또한 CICD에 의해서 최초 배포가 종료되면 API Gateway로 배포한 Endpoint URL이 나오는 것을 알 수 있습니다. 이 URL을 이용해서 추후 Canary 배포에 의해서 Traffic Shift가 잘 이루어지는지, Rollback은 잘 동작하는지를 확인합니다.  **Start coding** 버튼을 클릭하여 Cloud9으로 접속합니다.
+![](images/207_CodeStar_Cloud9_API.png)
+
+10. Cloud9에 접속하게 되면 자동으로 CodeCommit에 연결하고 소스코드를 Cloud9 환경에 설치합니다. 동작 구조가 궁금할 경우 쉘 스크립트 파일을 확인할 수 있습니다.
+![](images/208_CodeStar_Cloud9_Codecommit_clone1.png)
+    1. Lab1의 구조와 다른 점은 Unit 테스트를 하기 위한 test_handler.py 파일이 포함되어져 있습니다.
+    2. 그리고 CodeBuild를 통해서 SAM 및 코드를 실행 및 테스트 하기 위한 단계를 기술한 buildspec.yml 파일이 있는것을 확인할 수 있습니다.
+
+11. buildspec.yml 파일은 다음과 같은 형태로 구성되어져 있습니다.
+![](images/208_CodeStar_Cloud9_Codecommit_clone2.png)
+    1. CodeBuild가 시작되면, 자동으로 buildspec.yml 파일을 찾아서 스크립트를 실행합니다.
+    2. install: 환경을 구성하기 위해서 최초에 해야할 명령을 기술 합니다.
+    3. pre_build: 패키징 작업을 하기 전에 단위테스트를 수행할 수 있습니다.
+    4. build: 패키징 작업을 하고 해당 아티팩트를 S3 버킷에 업로드 합니다.
+    5. artifacts: 최종 산출물(template-export.yml)을 Zip 파일 형태로 작성합니다.
+
+#### 2. CloudFormation에서 Lambda 함수로 CodeDeploy 하기 위한 IAM 설정 ####
+1. CodeStar를 통해서 자동으로 Role이 만들어 졌습니다. 이 중에서 배포를 담당하는 서버리스 서비스의 배포를 담당하는 CloudFormation이 CodeDeploy를 할 수 있는 정책을 추가해야 합니다.
+따라서, 먼저  **IAM**  메뉴로 이동하고, Roles 네비게이션을 선택한 후  **WebAppCodeStar**  (CodeStar 프로젝트 이름)으로 검색합니다. 여기서  **CloudFormation**  으로 종료되는 것을 클릭합니다.
+![](images/209_CodeStar_CloudForamtion_IAM_Policy.png)
+
+2. **아래 코드는 덮어 쓰면 안됩니다. 원래 정책에서 편집해서 추가해야 합니다.**
+CodeStarWoker-webappcodestar-CloudFormation Role을 선택하고  **Permissions**  탭에서  **CodeStarWorkerCloudFormationRolePolicy** 를 선택합니다. 그리고 해당 Policy에 CodeDeploy를 이용해서 Lambda에서 Canary 배포를 할 수 있도록 추가 권한을 추가합니다. 아래 코드에서  <font color="red">**region**</font> 은  <font color="red">**ap-southeast-1(5개)**</font> 로 수정하고,  <font color="red>**id**</font> 는 본인  <font color="red>**AWS 계정 넘버 12자리(6개)**</font> 를 입력합니다. (<font color="red">**코드를 추가할 때에는, 기존 코드가 끝나는 부분에 ,(컴마)를 찍고, 해당 Policy를 추가해야 합니다.**</font>)
+![](images/210_CodeStar_Policy_edit1.png)
+    ``` json
+    {
+    "Action": [
+        "s3:GetObject",
+        "s3:GetObjectVersion",
+        "s3:GetBucketVersioning"
+    ],
+    "Resource": "*",
+    "Effect": "Allow"
+    },
+    {
+    "Action": [
+        "s3:PutObject"
+    ],
+    "Resource": [
+        "arn:aws:s3:::codepipeline*"
+    ],
+    "Effect": "Allow"
+    },
+    {
+    "Action": [
+        "lambda:*"
+    ],
+    "Resource": [
+        "arn:aws:lambda:region:id:function:*"
+    ],
+    "Effect": "Allow"
+    },
+    {
+    "Action": [
+        "apigateway:*"
+    ],
+    "Resource": [
+        "arn:aws:apigateway:region::*"
+    ],
+    "Effect": "Allow"
+    },
+    {
+    "Action": [
+        "iam:GetRole",
+        "iam:CreateRole",
+        "iam:DeleteRole",
+        "iam:PutRolePolicy"
+    ],
+    "Resource": [
+        "arn:aws:iam::id:role/*"
+    ],
+    "Effect": "Allow"
+    },
+    {
+    "Action": [
+        "iam:AttachRolePolicy",
+        "iam:DeleteRolePolicy",
+        "iam:DetachRolePolicy"
+    ],
+    "Resource": [
+        "arn:aws:iam::id:role/*"
+    ],
+    "Effect": "Allow"
+    },
+    {
+    "Action": [
+        "iam:PassRole"
+    ],
+    "Resource": [
+        "*"
+    ],
+    "Effect": "Allow"
+    },
+    {
+    "Action": [
+        "codedeploy:CreateApplication",
+        "codedeploy:DeleteApplication",
+        "codedeploy:RegisterApplicationRevision"
+    ],
+    "Resource": [
+        "arn:aws:codedeploy:region:id:application:*"
+    ],
+    "Effect": "Allow"
+    },
+    {
+    "Action": [
+        "codedeploy:CreateDeploymentGroup",
+        "codedeploy:CreateDeployment",
+        "codedeploy:DeleteDeploymentGroup",
+        "codedeploy:GetDeployment"
+    ],
+    "Resource": [
+        "arn:aws:codedeploy:region:id:deploymentgroup:*"
+    ],
+    "Effect": "Allow"
+    },
+    {
+    "Action": [
+        "codedeploy:GetDeploymentConfig"
+    ],
+    "Resource": [
+        "arn:aws:codedeploy:region:id:deploymentconfig:*"
+    ],
+    "Effect": "Allow"
+    }
+    ```
+
+3. 다음과 같이 JSON 탭을 열어서 수정한 코드를 추가합니다. 하단의 추가된 부분의 영역을 참고하세요. 그리고 Review policy 버튼을 클릭합니다.
+![](images/210_CodeStar_Policy_edit2.png)
+
+4. JSON에 이상이 없을 경우, Save Changes 버튼을 클릭하고 저장합니다. 아래와 같이  <font color="red">**CodeDeploy**</font> 가 보이는지 확인하세요.
+![](images/211_CodeStar_Policy_Save.png)
+
+#### 3. CodeDeploy를 통한 Lambda 함수 Canary 배포를 위한 SAM 설정 변경 ####
+1. SAM 템플릿에서 주석처리되어 있던 부분을 아래와 같이 제거합니다. SAM은 들여쓰기에 따라서 에러가 발생할 수 있으므로 주의합니다.
+![](images/212_CodeStar_sam_template_canary_change.png)
+
+2. SAM 템플릿 파일이 변경되었으므로 Code를 CodeCommit에 check-in 해 줍니다. 아래와 같이 폴더를 이동한 다음 git push르 합니다.
+![](images/213_CodeStar_Canary_Template_git_push.png)
+    ``` sh
+    cd webappcodestar
+    git add .
+    git commit -m 'Change SAM template'
+    git push origin master
+    ```
+
+3. CodeStar 대쉬보드를 통해서 CodeCommit에 83fba4c로 반영된 것을 확인할 수 있습니다. CodePipeline을 통해서 역시 배포가 되는 것을 확인할 수 있습니다. 그럼 Code에 대한 Package는 어떻게 일어나는지 CodeBuild에 들어가서 내부 동작 로그를 살펴 보겠습니다. CodePipeline에 있는 CoudeBuild를 클릭합니다.
+![](images/214_CodeStar_SAM_CodePipeline_check.png)
+
+#### 4. CodeBuild 과정 살펴보기 ####
+1. CodeBuild에 의해서 코드가 Package 되는 것을 확인할 수 있습니다. 최초 배포 이후 SAM 템플릿 변경에 따른 두 번째 실행이라는 것을 확인할 수 있습니다. 내부 동작 확인을 위해서 클릭해 보겠습니다.
+![](images/215_CodeStar_CoudeBuild_check.png)
+
+2. 모든 Phase 에서 성공한 것을 확인할 수 있습니다. CodeBuild에서는 패키징을 하기 전 컨테이너에 실행환경을 INSTALL하고 로컬 기반의 단위 테스트를 빌드하기 전 PRE_BUILD 단계에서 수행할 수 있습니다. 그리고 BUILD를 하게 됩니다. 빌드가 되면, 해당 아티팩트는 S3 버킷에 업로드 되며, CodePipeline은 아티팩트 결과물은 다음 Stage의 Input Artifact로 받게 됩니다.
+![](images/216_CodeStar_CodeBuild_check.png)
+
+#### 5. CloudFromation 템플릿으로 리소스 배포 확인 ####
+1. Deploy 단계에서는 CloudFormation(SAM) 기반으로 리소스가 배포가 되는 것을 확인할 수 있습니다. Deploy 단계에서 CloudFormation을 클릭합니다.
+![](images/217_CodeStar_Pipeline_Cloudformation_Check.png)
+
+2. Stack에서 Lambda 함수가 CloudFormation에서 배포가 업데이트 되고 있는 것을 확인할 수 있습니다. 상세한 배포 내용은 해당 Stack을 클릭해서 확인할 수 있습니다.
+![](images/219_CodeStar_Stack_cehck.png)
+
+#### 6. 버저닝 된 Lambda 함수 배포 확인 ####
+1. Lambda 함수에서 CodeStar에 의해서 배포가 완료된 Lambda 함수를 선택하여 들어갑니다.
+![](images/220_CodeStar_Lambda_version_check.png)
+ 버전 정보를 확인하면, 버전 1에 대해서 live Alias가 설정되어 있는 것을 확인할 수 있습니다. 배포가 추가적으로 이루어지면 버전은 자동으로 1씩 증가하게 되고 이슈가 없을 경우 Live Alias는 최신 버전으로 자동으로 올라오게 됩니다. API Gatewat는 해당 Lambda 함수에서 다양한 버전 중 지정한 Alias를 호출할 수 있습니다. 현재는 SAM에 의해서 live Alias를 지정하고 있습니다.
+
+#### 7. 추가 배포를 통한 단위 테스트 확인 ####
+1. 소스코드를 변경합니다. 다음과 같이 뒤에 Version 2! 라고 추가하였습니다. 그리고 Code를 check in 합니다.
+![](images/222_CodeStar_index_git_check_in.png)
+
+2. CodeStar 대쉬보드에서 CodeCommit에 Check in 된 정보와 CodePipeline이 다시 수행되는 것을 알 수 있습니다.
+![](images/223_CodeStar_CodePipeline_check_ok.png) 
+여기서는 결과 뒷쪽만 변경했기 때문에 CodeBuild에서 Fail이 발생하지 않습니다. 단위 테스트 Fail을 위해서 다음과 같이 코드를 수정합니다.
+3. assertIn 함수로 인해서 해당 문구가 포함되어 있으면 에러가 발생하지 않는 것을 확인할 수 있습니다.
+![](images/224_CodeStar_UnitTest_Check_01.png)
+
+4. 다음과 같이 원래 Lambda 함수 파일을 열어서  World  문자을 제거하고 소스코드를 check in 합니다.
+![](images/225_CodeStar_index_git_error_check_in.png)
+
+5. CodeBuild 단계에서 Failed가 발생하는 것을 알 수 있습니다. 좀 더 자세히 보기 위해서 CodeBuild를 클릭합니다.
+![](images/226_CodeStar_CodeBuild_error.png)
+
+6. Fail이 발생한 CodeBuild를 확인할 수 있습니다. 클릭하면 좀 더 상세한 정보를 확인할 수 있습니다.
+![](images/227_CodeStar_CodeBuild_fail_check1.png)
+
+7. 하단에 Build Logs를 보면 특정 문구가 나타나지 않아서 에러가 났다는 것을 확인할 수 있습니다.
+![](images/228_CodeStar_CodeBuild_fail_check2.png)
+
+8. 다시 코드로 돌아와서 해당 소스코드를 수정해 보겠습니다. 단위 테스트 파일에 World 가 없어도 되게끔 수정하고 배포합니다.
+![](images/229_CodeStar_UnitTest_fix.png)
+
+9. 위의 배포가 완료가 되면 아래처럼 배포를 하나 더 진행합니다. Lambda 함수 파일에 버전만 3으로 변경합니다.
+![](images/230_CodeStar_v3_change1.png)
+
+10. Hello World 문구를 포함하도록 단위 테스트를 수정합니다.
+![](images/231_CodeStar_v3_chagne2.png)
+
+11. 두 개 파일 변경 분에 대해서 코드를 배포합니다.
+![](images/232_CodeStar_change3_check_in.png)
+
+12. 정상적으로 Build와 Deploy가 진행되는 것을 확인할 수 있습니다.
+![](images/233_CodeStar_new_version.png)
+
+#### 8. Canary 배포 확인하기 ####
+1. 카나리 배포는 다음과 같이 Deploy 단계의 스택에서 확인할 수 있습니다.
+![](images/234_CodeStar_Cloudformation_stack.png)
+
+2. Events에 보면 Canary 배포를 위해서 진행 상태라는 것을 볼 수 있습니다. 뒷쪽에 있는  **CodeDeploy deployment started** 를 클릭합니다.
+![](images/235_CodeStar_CodeDeploy.png)
+
+3. CodeDeploy 화면으로 전환되고 현재 Carnary 배포로 원래 버전 90%, 새 버전 10%로 진행되고 있는 것을 확인할 수 있습니다. 5분이 흐르면 새 버전으로 트래픽이 모두 넘어가는 것을 볼 수 있습니다. 해당 단계에서 실제 API를 호출해서 트래픽이 9:1로 나오는지 확인 할 수 있습니다.
+![](images/236_CodeStar_CodeDeploy_Canary.png)
+
+4. CodeStar에서 제공하는 API Endpoint URL로 접근 하면, 호출을 반복하면 10번 중 9번은 다음과 같이 이전 버전이 호출되는 것을 확인할 수 있습니다.
+![](images/237_CodeStar_Check_old_90.png)
+
+5. 10번 중 1번은 아래와 같이 버전 업데이트 된 결과를 볼 수 있습니다. Canary 배포는 지정된 5분이 지나가면 자동으로 새버전이 Alias가 live로 변경되면서 트래픽이 모두 넘어갑니다.
+![](images/238_CodeStar_check_new_10.png)
+
+#### 9. Lambda 함수 이전 버전으로 롤백하기 ####
+1. Lambda 함수로 이동합니다.
+![](images/239_CodeStar_Lambda_01.png)
+
+2. Alias를 추가로 등록할 예정입니다.
+![](images/240_CodeStar_Lambda_02.png)
+
+3. 현재 4버전까지 Live가 되어 있는것을 확인할 수 있습니다. 2버전에 Alias를 추가하고 롤백하겠습니다. 버전 2를 클릭해서 함수를 확인합니다.
+![](images/241_CodeStar_Lambda_Rollback_01.png)
+
+4. 버전 2가 보여줄 결과값을 확인하고 Alias를 생성합니다.
+![](images/242_CodeStar_Lambda_Rollback_Alias.png)
+
+5. Alias의 이름과 설명과 버전을 설정합니다.
+![](images/243_CodeStar_Lambda_Rollback_03.png)
+
+6. Alias에 2버전에 대해서 Rollback Alias가 추가된 것을 확인할 수 있습니다.
+![](images/244_CodeStar_Lambda_Rollback_04.png)
+
+7. 버전 탭에서도 확인할 수 있습니다. 이제 live가 아닌 Rollback으로 Lambda를 호출하도록 변경하겠습니다.
+![](images/245_CodeStar_Lambda_Rollback_05.png)
+
+8. API Gateway로 이동합니다. 리소스를 선택하고 GET 메서드에 대해서 Integration Request 를 클릭합니다.
+![](images/246_CodeStar_Lambda_Rollback_06.png)
+
+9. Lambda를 호출하는 이름 뒤에 Alias가 live로 되어 있는 것을 확인할 수 있습니다. 이를 Rollback으로 변경합니다.
+![](images/247_CodeStar_Lambda_Rollback_07.png)
+
+10. 다음과 같이 퍼미션을 추가하고 OK 버튼을 클릭합니다.
+![](images/248_CodeStar_Lambda_Rollback_08.png)
+
+11. API를 배포해야지 적용이 됩니다. Actions 버튼을 클릭하고 Deploy API를 클릭합니다.
+![](images/249_CodeStar_Lambda_Rollback_09.png)
+
+12. API를 Prod 스테이지에 배포합니다. Deploy 버튼을 클릭합니다.
+![](images/250_CodeStar_Lambda_Rollback_10.png)
+
+13. API Endpoint를 통해서 다음과 같이 2버전의 Lambda 함수가 호출되는 것을 확인할 수 있습니다.
+![](images/251_CodeStar_Lambda_Rollback_11.png)
+
+#### 10. 리소스 삭제 ####
+1. 이후 테스트는 자유롭게 할 수 있습니다. 테스트가 모두 완료되면, 지금까지 배포된 Stack을 모두 지우면서 리소스를 삭제합니다.
+
+### 3. 도전 과제 (시간 관계상 별도로 진행해 보세요.) ###
+1. 다음과 같이 Lab2의 CodeStar에서 만든 프로젝트의 소스코드를 Lab1의 소스코드로 변경해서  배포할 수 있습니다. 기존 작성한 소스 코드를 쉽게 CICD 배포 프로세스로 구축할 수 있습니다.
+
+2. 참고 소스: [2018 DevDay - Amazon Polly와 Cloud9을 활용한 서버리스 웹 애플리케이션 및 CI/CD 배포 프로세스 구축](https://www.slideshare.net/awskorea/amazon-polly-cloud9-cicd-aws-aws-devday-2018) 세션 Live 데모를 참고하세요.
+![](images/image2018-11-12_15-42-28.png)
+
+3. 정적 웹 호스팅을 하는 S3 버켓으로 배포하는 파이프라인을 직접 구축할 수 있습니다.
+
+4. 완성된 아키텍처 다이어그램 예시
+![](images/architecture_final.png)
+
+5. 참고자료 모음 
+   1. [직접 파이프라인을 만들기](https://docs.aws.amazon.com/ko_kr/lambda/latest/dg/build-pipeline.html)
+   2. [AWS Lambda 프로젝트의 트래픽 이동](https://docs.aws.amazon.com/ko_kr/codestar/latest/userguide/how-to-modify-serverless-project.html?icmpid=docs_acs_rm_tr)
+   3. [3-티어를 서버리스로 마이그레이션 하는 HOL](https://github.com/kpyopark/moving-to-serverless-immersion-day/blob/master/lab-guide/LAB01.md#task-1-create-aws-cloud9-environment-and-explore-the-environment)
+   4. [AWS CodePipeline, 이제 Amazon S3에 대한 배포 지원](https://aws.amazon.com/ko/about-aws/whats-new/2019/01/aws-codepipeline-now-supports-deploying-to-amazon-s3/)
+      * [Tutorial: Create a Pipeline That Uses Amazon S3 as a Deployment Provider](https://docs.aws.amazon.com/codepipeline/latest/userguide/tutorials-s3deploy.html)
+<!--
+   5. CodeStar에서 자동으로 생성된 CodeCommit에 방금 만든 소스 반영하기
+      1. CodeCommit을 위한 연결 설정하기.
+      2. Cloud9을 사용하는 유저가 CodeCommit으로 접근할 수 있는 권한을 주고 IAM으로 이동하여 퍼블릭 키를 등록합니다.
+
+            ``` ssh
+            cd ~/.ssh/
+            ssh-keygen
+            cat codecommit_rsa.pub
+            vi config
+            chmod 600 config
+            ssh git-codecommit.ap-southeast-1.amazonaws.com
+            ```
+
+            CodeCommit에 연결될 수 있는 권한  체크하고!
+
+            ```
+            Host git-codecommit.*.amazonaws.com
+                User APKAJLDPX4MQKVMHRE4Q
+                IdentityFile ~/.ssh/codecommit_rsa
+            ```
+
+            해당 소스 리포지터리를 클론합니다.
+
+            ``` ssh
+            cd ~/environment/
+
+            git clone ssh://url
+            ```
+
+      3. 소스코드를 옮기는 작업을 합니다.
+      4. 기존 소스코드를 삭제합니다. (람다 함수 4개)
+      5. buildspec.yaml 단위테스트를 삭제합니다.
+      6. 템플릿을 이전합니다. 기존 파라미터 설정값은 유지 합니다. 7. 그리고 배포 버저닝을 위해서 코드 해제 합니다. 퍼센트는 30%로 변경.
+      7. CloudFormation이 배포하기 때문에 권한을 줘야 하는데, HoL이므로 편의를 위해 **일단 전체 권한 부여**. 
+      8. ```README.md``` 파일 수정하고 커밋하고 푸쉬 합니다.
+      9.  코드 배포 되는거 확인하고 EndPoint URL로 확인해 봅니다. (기존것 나오는지 확인)
+-->
