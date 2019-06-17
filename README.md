@@ -966,7 +966,7 @@ Lab2에서는 서버리스 서비스의 CICD 배포 프로세스 이해를 위�
 ![](images/209_CodeStar_CloudForamtion_IAM_Policy.png)
 
 2. **아래 코드는 덮어 쓰면 안됩니다. 원래 정책에서 편집해서 추가해야 합니다.**
-CodeStarWoker-webappcodestar-CloudFormation Role을 선택하고  **Permissions**  탭에서  **CodeStarWorkerCloudFormationRolePolicy** 를 선택합니다. 그리고 해당 Policy에 CodeDeploy를 이용해서 Lambda에서 Canary 배포를 할 수 있도록 추가 권한을 추가합니다. 아래 코드에서  <font color="red">**region**</font> 은  <font color="red">**ap-southeast-1(5개)**</font> 로 수정하고,  <font color="red>**id**</font> 는 본인  <font color="red>**AWS 계정 넘버 12자리(6개)**</font> 를 입력합니다. (<font color="red">**코드를 추가할 때에는, 기존 코드가 끝나는 부분에 ,(컴마)를 찍고, 해당 Policy를 추가해야 합니다.**</font>)
+CodeStarWoker-webappcodestar-CloudFormation Role을 선택하고  **Permissions**  탭에서  **CodeStarWorkerCloudFormationRolePolicy** 를 선택합니다. 그리고 해당 Policy에 CodeDeploy를 이용해서 Lambda에서 Canary 배포를 할 수 있도록 추가 권한을 추가합니다. 아래 코드에서  <font color="red">**region**</font> 은  <font color="red">**ap-southeast-1(5개)**</font> 로 수정하고,  <font color="red">**id**</font> 는 본인  <font color="red">**AWS 계정 넘버 12자리(6개)**</font> 를 입력합니다. (<font color="red">**코드를 추가할 때에는, 기존 코드가 끝나는 부분에 ,(컴마)를 찍고, 해당 Policy를 추가해야 합니다.**</font>)
 ![](images/210_CodeStar_Policy_edit1.png)
     ``` json
     {
