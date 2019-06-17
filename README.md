@@ -184,16 +184,17 @@ Lab1은 Cloud9 IDE를 이용하여 서버리스 웹 애플리케이션을 구축
 ![](images/image2018-10-23_9-29-54.png)
 
 10. 아래의 SAM 템플릿 코드로 교체하고,  <font color="red">**Ctrl+S를 눌러서 저장 합니다.**</font>
-**PostNewsTemplate_01**
+
+    **PostNewsTemplate_01**
     ``` yaml
     AWSTemplateFormatVersion: '2010-09-09'
     Transform: 'AWS::Serverless-2016-10-31'
     Description: >-
-    Building Serverless development environment and CI/CD process for DevOps based on Cloud9
+      Building Serverless development environment and CI/CD process for DevOps based on Cloud9
     
     Globals:
     
-    Function:
+      Function:
         Runtime: python2.7
         Handler: lambda_function.lambda_handler
         MemorySize: 128
@@ -201,30 +202,30 @@ Lab1은 Cloud9 IDE를 이용하여 서버리스 웹 애플리케이션을 구축
     
     Resources:
     
-    PostNews:
+      PostNews:
         Type: 'AWS::Serverless::Function'
         Properties:
-        CodeUri: PostNews
-        Description: Post news text to convert from text to speech
-        Tracing: Active
-        Events:
+          CodeUri: PostNews
+          Description: Post news text to convert from text to speech
+          Tracing: Active
+          Events:
             PostNewsApi:
-            Type: Api
-            Properties:
+              Type: Api
+              Properties:
                 Path: /news
                 Method: POST
-        Policies:
+          Policies:
             - Version: '2012-10-17'
-            Statement:
+              Statement:
                 - Effect: Allow
-                Action:
+                  Action:
                     - 'logs:PutLogEvents'
                     - 'logs:CreateLogStream'
                     - 's3:PutObject'
                     - 'sns:Publish'
                     - 'dynamodb:PutItem'
                     - 'polly:StartSpeechSynthesisTask'
-                Resource: '*'
+                  Resource: '*'
     ```
 위에 기술되어진 SAM 템플릿에 대한 설명은 다음과 같습니다. 추후 이어지는 SAM도 유사하게 해석할 수 있습니다. 
 
