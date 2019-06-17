@@ -107,77 +107,801 @@ Lab1은 Cloud9 IDE를 이용하여 서버리스 웹 애플리케이션을 구축
     5. 자동으로 template을 기반으로 Lambda 서비스에 배포할 수 있습니다. 배포할 경우, 이름은  **Cloud9-** 접두사와 Application 이름인  **WebApp-** 이 접두사로 붙는 것을 확인할 수 있습니다.
 8. PostNews 함수는 아래에서 제공하는 **코드로 대체**하고  <font color="red">**Ctrl+S를 눌러서 저장**</font>합니다. 코드에 대한 설명은 주석을 참조하십시오.
 ![](images/image2018-10-23_9-28-23.png)
-
-
 **PostNews**
-```python 
-# -*- coding: utf-8 -*-
-from __future__ import print_function
-  
-import boto3
-import os
-import json
-import uuid
-import datetime
-import re
- 
-def lambda_handler(event, context):
-    if "body" in event:
-        parmas = json.loads(event['body'])
-     
-    voice = parmas["voice"]
-    originText = parmas["text"]
-    timbre = parmas["timbre"]
-    pitch = parmas["pitch"]
-    updateDate = datetime.datetime.now().strftime("%Y%m%d")
-  
-    polly = boto3.client('polly')
-    removeBrackets = re.sub(r'\([^)]*\)', '', originText)
-    repTextBlock = re.sub('[·…]', '<break time="100ms"/>', removeBrackets)
-    ssmlBlock = "<speak><amazon:effect vocal-tract-length=\"" + timbre + "\"><prosody pitch=\"" + pitch + "\">" + repTextBlock + "</prosody></amazon:effect></speak>"
-    ssmlBlock = ssmlBlock.replace('철수', '<amazon:effect vocal-tract-length="+80%"><prosody pitch="-70%">안녕하세요? 저는 서연 친구 철수에요.</prosody></amazon:effect>')
-    ssmlBlock = ssmlBlock.replace('귀신', '<amazon:effect name="whispered"><amazon:effect vocal-tract-length="-30%"><prosody volume="loud">나 꿍꼬또, 기싱꿍꼬또</prosody></amazon:effect></amazon:effect>')
-    print (ssmlBlock)
-      
-    response = polly.start_speech_synthesis_task(
-        OutputFormat= 'mp3',
-        OutputS3BucketName= os.environ['BUCKET_NAME'],
-        # OutputS3KeyPrefix='polly/',
-        SampleRate='22050',
-        SnsTopicArn=os.environ['SNS_TOPIC'],
-        Text=ssmlBlock,
-        TextType='ssml',
-        VoiceId=voice
-    )
-    print (response)
-    data = response['SynthesisTask']
-      
-    # Creating new record in DynamoDB table
-    dynamodb = boto3.resource('dynamodb')
-    table = dynamodb.Table(os.environ['DB_TABLE_NAME'])
-    table.put_item(
-        Item = {
-            'id' : data['TaskId'],
-            'updateDate': data['CreationTime'].strftime("%Y-%m-%d %H:%M:%S"),
-            'voice' : voice,
-            'originText': originText,
-            'pollyStatus' : data['TaskStatus'],
-            'timbre': timbre,
-            'pitch': pitch,
-            'mp3Url': data['OutputUri'],
-            'RequestCharacters': data['RequestCharacters']
+    ```python 
+    # -*- coding: utf-8 -*-
+    from __future__ import print_function
+    
+    import boto3
+    import os
+    import json
+    import uuid
+    import datetime
+    import re
+    
+    def lambda_handler(event, context):
+        if "body" in event:
+            parmas = json.loads(event['body'])
+        
+        voice = parmas["voice"]
+        originText = parmas["text"]
+        timbre = parmas["timbre"]
+        pitch = parmas["pitch"]
+        updateDate = datetime.datetime.now().strftime("%Y%m%d")
+    
+        polly = boto3.client('polly')
+        removeBrackets = re.sub(r'\([^)]*\)', '', originText)
+        repTextBlock = re.sub('[·…]', '<break time="100ms"/>', removeBrackets)
+        ssmlBlock = "<speak><amazon:effect vocal-tract-length=\"" + timbre + "\"><prosody pitch=\"" + pitch + "\">" + repTextBlock + "</prosody></amazon:effect></speak>"
+        ssmlBlock = ssmlBlock.replace('철수', '<amazon:effect vocal-tract-length="+80%"><prosody pitch="-70%">안녕하세요? 저는 서연 친구 철수에요.</prosody></amazon:effect>')
+        ssmlBlock = ssmlBlock.replace('귀신', '<amazon:effect name="whispered"><amazon:effect vocal-tract-length="-30%"><prosody volume="loud">나 꿍꼬또, 기싱꿍꼬또</prosody></amazon:effect></amazon:effect>')
+        print (ssmlBlock)
+        
+        response = polly.start_speech_synthesis_task(
+            OutputFormat= 'mp3',
+            OutputS3BucketName= os.environ['BUCKET_NAME'],
+            # OutputS3KeyPrefix='polly/',
+            SampleRate='22050',
+            SnsTopicArn=os.environ['SNS_TOPIC'],
+            Text=ssmlBlock,
+            TextType='ssml',
+            VoiceId=voice
+        )
+        print (response)
+        data = response['SynthesisTask']
+        
+        # Creating new record in DynamoDB table
+        dynamodb = boto3.resource('dynamodb')
+        table = dynamodb.Table(os.environ['DB_TABLE_NAME'])
+        table.put_item(
+            Item = {
+                'id' : data['TaskId'],
+                'updateDate': data['CreationTime'].strftime("%Y-%m-%d %H:%M:%S"),
+                'voice' : voice,
+                'originText': originText,
+                'pollyStatus' : data['TaskStatus'],
+                'timbre': timbre,
+                'pitch': pitch,
+                'mp3Url': data['OutputUri'],
+                'RequestCharacters': data['RequestCharacters']
+            }
+        )
+        
+        result = {
+            'statusCode': 200,
+            'body': json.dumps({'recordId': data['TaskId']}),
+            'headers': {
+                'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*'
+            }
         }
-    )
-     
-    result = {
-        'statusCode': 200,
-        'body': json.dumps({'recordId': data['TaskId']}),
-        'headers': {
-            'Content-Type': 'application/json',
-            'Access-Control-Allow-Origin': '*'
-        }
-    }
-      
-    return result
+        
+        return result
 
+    ```
+
+9. 이번에는 SAM Template을 변경합니다. 먼저 좌측 소스코드 영역에서  template.yaml 파일을 더블클릭하여 편집 창을 열어 줍니다. 아래와 같이 자동으로 생성되어 있는 SAM 템플릿 코드를 볼 수 있습니다. 이 실습에서는 자동으로 생성된 SAM 템플릿을 사용하지 않고 SAM 템플릿을 교체합니다.
+![](images/image2018-10-23_9-29-54.png)
+
+10. 아래의 SAM 템플릿 코드로 교체하고,  <font color="red">**Ctrl+S를 눌러서 저장 합니다.**</font>
+**PostNewsTemplate_01**
+    ``` yaml
+    AWSTemplateFormatVersion: '2010-09-09'
+    Transform: 'AWS::Serverless-2016-10-31'
+    Description: >-
+    Building Serverless development environment and CI/CD process for DevOps based on Cloud9
+    
+    Globals:
+    
+    Function:
+        Runtime: python2.7
+        Handler: lambda_function.lambda_handler
+        MemorySize: 128
+        Timeout: 60
+    
+    Resources:
+    
+    PostNews:
+        Type: 'AWS::Serverless::Function'
+        Properties:
+        CodeUri: PostNews
+        Description: Post news text to convert from text to speech
+        Tracing: Active
+        Events:
+            PostNewsApi:
+            Type: Api
+            Properties:
+                Path: /news
+                Method: POST
+        Policies:
+            - Version: '2012-10-17'
+            Statement:
+                - Effect: Allow
+                Action:
+                    - 'logs:PutLogEvents'
+                    - 'logs:CreateLogStream'
+                    - 's3:PutObject'
+                    - 'sns:Publish'
+                    - 'dynamodb:PutItem'
+                    - 'polly:StartSpeechSynthesisTask'
+                Resource: '*'
+    ```
+위에 기술되어진 SAM 템플릿에 대한 설명은 다음과 같습니다. 추후 이어지는 SAM도 유사하게 해석할 수 있습니다. 
+
+> ⓘ해당 템플릿은 SAM(Serverless Architecture Model)을 기반으로 한 템플릿입니다.
+> 
+> Globals를 통해서 리소스에서 공통으로 사용하는 값을 사전에 정의할 수 있습니다.
+>여기서는 Function, 즉 Lambda 함수에 대해서 모두 자동으로 다음과 같은 값이 적용됩니다.
+>런타임은 Python2.7 기반이며, lambda_function 파일에 있는 lambda_hanlder 함수를 시작함수로 지정합니다. 메모리 사이즈는 128MB이며 Lambda가 실행되는 시간은 최대 60초입니다.
+>
+>리소스를 정의하는 단계에서는 먼저 리소스에 대한 이름을 쓰고 리소스가 가진 서비스 타입을 명시합니다.
+>PostNews라는 리소스를 만들 것이고, AWS:Serverless:Function 타입이므로 Lambda 함수를 의미합니다.
+>이 함수가 가지는 속성 값으로는 Globals에서 상속 받는 런타임, 핸들러, 메모리사이즈, 실행시간이 있습니다.
+>CodeUri는 소스코드가 위치한 폴더를 지칭합니다. 해당 Lambda 함수가 PostNews 폴더에 있다는 것을 의미합니다.
+>
+>해당 Lambda 함수를 동작시키는 이벤트 트리거의 이름은 PostNewsApi 입니다.
+>이 리소스의 서비스 타입은 API이므로 API Gateway가 됩니다.
+API Gateway가 가지는 속성 값으로 리소스에 대한 경로는 /news를 사용합니다.
+>그리고 News를 등록하는 작업이기 때문에 HTTP Method는 POST를 사용합니다.
+>
+>해당 Lambda 함수가 실행하는 동안 접근해야할 리소스에 대한 권한을 설정할 수 있습니다. 이를 정책으로 정의할 수 있습니다.
+>정책은 CloudWatch Logs에 코드에서 발생한 로그를 기록할 수 있는 정책을 추가합니다.
+>또한 DynamoDB 테이블에 값을 추가할 수 있는 정책과 비동기 처리를 위해서 Polly에 Task를 등록하고, Polly가 MP3 파일을 업로드 하고, 작업 완료 후, SNS을 게시할 수 있는 권한을 부여합니다.
+
+11. 변경하여 수정한 SAM 템플릿 구성은 다음과 같습니다. 각 구성에 대해서 다시 한 번 자세히 살펴보면 아래와 같습니다.
+![](images/image2018-10-23_1-57-4.png)
+    1. Globals 는 전역으로 사용합니다. 함수(Function)나 API에서 반복해서 사용하는 것을 선언할 수 있습니다.
+    2. Resources 는 AWS 서비스를 정의합니다. 각 서비스에 대해서 이름을 선언하고, Type을 정할 수 있습니다.
+    3. Runtime 은 Function에서 사용합니다. 4개의 Lambda 함수가 모두 Python 2.7 기반이기 때문에  python2.7 을 선언합니다.
+    4. Type 은 서비스 타입을 의미합니다. Lambda 함수, API Gateway, DynamoDB, SNS, S3 등을 표기할 수 있습니다.
+    5. CodeUri 는 Lambda 함수가 위치한 폴더를 의미합니다. template.yaml 파일 기준으로 Lambda 함수가 있는 폴더의 이름을 지정합니다.
+    6. Handler 는 Lambda 함수가 시작하는 함수의  파일명.함수명 에 대한 구성을 의미 합니다. 모두  lambda_function.py 파일에 선언되어 있는  lambda_handler 함수가 시작 함수가 됩니다. 각각의 함수는 폴더가 서로 다릅니다.
+    7. MemorySize 는  128MB 로 모두 구성되어 있으며, Lambda 함수의 최대 구동 시간은  Timeout 값을 사용하고  60 초로 설정합니다.
+    8. Events 는 Lambda 함수를 트리거하는 이벤트를 의미합니다.  API Gateway 일 경우  Type  은  Api 가 됩니다. SNS에 의해서 트리거 될 경우, Type은 Sns가 됩니다.
+    9. Policies 는 해당 함수가 접근할 수 있는 서비스에 대한 권한을 줄 수 있습니다. 각각의 함수는 최소 권한의 원칙에 의거하여 필요한 정책만을 연결합니다.
+    10. PostNews 함수는 동작 로그를 남기기 위해서  logs:PutLogEvents 와 logs:CreateLogStream 을, DynamoDB에 항목을 추가하기 위해서  dynamodb:PutItem  이 필요합니다. 또한 Polly를 통해서 TTS 서비스 작업을 비동기적으로 처리하기 위해서  polly:StartSpeechSynthesisTask 가 필요하고, MP3를 업로드 하기 위한 권한  s3:PutObject 과 Polly 작업 완료시 SNS Topic에 게시하기 위해서  sns:Publish  를 설정합니다.
+12. SAM 설정이 완료되면 해당 template.yaml 파일을 Cloud9에서 바로 배포할 수 있습니다.
+![](images/image2018-10-23_9-32-23.png)
+    1. 우측의 해당 Lambda 함수에서 마우스 우측 버튼을 클릭하고  Deploy 명령을 수행 합니다. 해당 SAM 템플릿이 CloudFormation Stack에 업데이트 되는 것을 확인할 수 있습니다. 서비스에서  CloudFormation  서비스로 이동하면  cloud9-WebApp 이 추가되어 있는 것을 확인할 수 있습니다. 해당 Stack을 클릭하면 배포된 리소스를 알 수 있습니다. 다음 서버리스 리소스 추가 부분에서 CloudFormation에 추가된 템플릿을 확인하겠습니다.
+#### 3. SAM 기반 서버리스 리소스 추가 ####
+1. SAM 템플릿을 이용해서 S3 Bucket, SNS, DynamoDB 테이블을 배포할 수 있습니다. 다음과 같이 template.yaml 파일에 리소스에 추가합니다
+![](images/image2018-10-23_9-39-15.png)
+    1. **Environment**: 환경 변수를 선언합니다. 각각의 Lambda 함수에는 DynamoDB, SNS, S3 버킷에 접근하기 위해서 ARN이 필요합니다. SAM에서 자동으로 만들어준 각각의 리소스 ARN을 참조할 수 있도록 설정합니다.
+    2. **NewsTable**: SAM에서 SimpleTable은 DynamoDB를 의미합니다. 여기서 DynamoDB를 기본 세팅인 WCU 5, RCU 5 값으로 생성합니다.
+    3. **NewsTopic**: PostNews에 들어온 텍스트 값은 비동기적으로 처리를 위하여 ConvertAudio 함수의 처리를 필요로 합니다. ConvertAudio의 처리를 위해서 사용할 SNS Topic을 하나 생성합니다.
+    4. **PollyMp3Bucket**: Amazon Polly를 이용해서 생성한 MP3 파일을 저장할 S3 버킷을 생성합니다.
+    5. **StaticWebBucket**: S3는 객체 스토리지이면서 정적 웹 호스팅을 위한 서비스로 활용할 수 있습니다. 여기서는 정적 웹 호스팅을 위한 설정까지 함께 구성하여 SAM에 서비스를 추가합니다.
+    6. 변경된 SAM 템플릿을 반영하기 위해서 우측 Lambda 함수에서 마우스 우측 버튼을 클릭하고 Deploy 명령을 수행합니다.
+
+    **PostNewsTemplate_02**
+    ``` yaml
+    AWSTemplateFormatVersion: '2010-09-09'
+    Transform: 'AWS::Serverless-2016-10-31'
+    Description: >-
+    Building Serverless development environment and CI/CD process for DevOps based on Cloud9
+
+    Globals:
+
+    Function:
+        Runtime: python2.7
+        Handler: lambda_function.lambda_handler
+        MemorySize: 128
+        Timeout: 60
+        Environment:
+        Variables:
+            DB_TABLE_NAME:
+            Ref: NewsTable
+            SNS_TOPIC:
+            Ref: NewsTopic
+            BUCKET_NAME:
+            Ref: PollyMp3Bucket
+
+    Resources:
+
+    NewsTable:
+        Type: 'AWS::Serverless::SimpleTable'
+        Properties:
+        PrimaryKey:
+            Name: id
+            Type: String
+        ProvisionedThroughput:
+            ReadCapacityUnits: 5
+            WriteCapacityUnits: 5
+
+    NewsTopic:
+        Type: 'AWS::SNS::Topic'
+        Properties:
+        DisplayName: NewsTopic
+
+    PollyMp3Bucket:
+        Type: 'AWS::S3::Bucket'
+
+    StaticWebBucket:
+        Type: 'AWS::S3::Bucket'
+        Properties:
+        AccessControl: PublicRead
+        WebsiteConfiguration:
+            IndexDocument: index.html
+            ErrorDocument: error.html
+
+    PostNews:
+        Type: 'AWS::Serverless::Function'
+        Properties:
+        CodeUri: PostNews
+        Description: Post news text to convert from text to speech
+        Tracing: Active
+        Events:
+            PostNewsApi:
+            Type: Api
+            Properties:
+                Path: /news
+                Method: POST
+        Policies:
+            - Version: '2012-10-17'
+            Statement:
+                - Effect: Allow
+                Action:
+                    - 'logs:PutLogEvents'
+                    - 'logs:CreateLogStream'
+                    - 's3:PutObject'
+                    - 'sns:Publish'
+                    - 'dynamodb:PutItem'
+                    - 'polly:StartSpeechSynthesisTask'
+                Resource: '*'
+    ```
+2. AWS 관리 콘솔에서 CloudFormation 서비스로 이동하면 다음과 같이 Stack을 확인할 수 있습니다.
+![](images/image2018-10-23_9-41-42.png)
+   1. Cloud9 환경을 배포했기 때문에 해당 Stack( aws-cloud9-NewsWebApp-xxxxxxxxxx )이 등록되어 있는 것을 확인할 수 있습니다.
+   2. Cloud9 환경에서 만든 WebApp이 배포된  Cloud9-WebApp  Stack을 확인할 수 있습니다.
+3. 아래와 같이 Cloud9에서 SAM template을 변경하고 Delpoy 하면, 해당 Stack이 업데이트 되는 것을 확인할 수 있습니다.
+![](images/021_Cloud9_Cloudformation_Stack_Change.png)
+4. **Cloud9-WebApp** 을 클릭하고 들어가면, Stack에 대해서 자세히 확인할 수 있습니다. 현재 추가로 배포한 리소스가 배포 완료된 것을 확인할 수 있습니다.
+![](images/image2018-10-23_9-45-38.png)
+#### 4. "UpdateNews" Lambda 함수 생성 ####
+1. *새로운 함수를 생성하기 전에, 화면에 열려 있는 파일   <font color="red">template.yaml 파일을 반드시 닫습니다.</font> (파일을 닫지 않고 생성할 경우, 자동으로 template에 리소스가 추가되지 않습니다. 직접 추가해도 무방합니다.)*
+2. 우측 AWS Resources 탭에 있는 Lambda 아이콘을 클릭하여 두 번째 함수인 **UpdateNews** 함수를 생성합니다. Application name은  **WebApp**이고, Function name은  **UpdateNews** 를 입력하고 우측 하단의  **Next** 버튼을 클릭합니다. **(2.2 참고)**
+![](images/image2018-10-23_9-47-49.png)
+3. Runtime은  Python2.7 을 선택하고 blueprint는  hello-world-python 을 선택하고,  Next 버튼을 클릭합니다. **(2.3 참고)**
+![](images/image2018-10-23_9-48-14.png)
+4. **UpdateNews** 함수는 SNS에 의하여 trigger됩니다. SAM 을 통해서 등록할 예정이므로, **Function trigger**는  **none** 으로 설정합니다.
+![](images/image2018-10-23_9-48-35.png)
+5. **UpdateNews** 함수를 실행하는 Memory는 **128MB**로 지정합니다. Role은 **Automatically generate role**을 선택하고, Next 버튼을 클릭합니다. Role에 들어갈 정책(Policy)는 SAM 템플릿에서 직접 설정할 예정입니다. 
+![](images/image2018-10-23_9-48-55.png)
+6. **UpdateNews** 함수 구성을 확인합니다. 별도의 이상이 없을 경우, **Finish**  버튼을 클릭 합니다.
+![](images/image2018-10-23_9-49-15.png)
+7. **UpdateNews** 함수 코드를 다음과 같이 변경하고 저장합니다. Amazon Polly로부터 작업이 완료되면, DynamoDB에 해당 작업을 업데이트 하고, Polly가 S3에 업로드한 MP3에 접근할 수 있도록 Public-read 권한을 부여합니다. 
+**UpdateNews**
+    ``` python
+    from __future__ import print_function
+    
+    import boto3
+    import os
+    import json
+    from contextlib import closing
+    from boto3.dynamodb.conditions import Key, Attr
+    import re
+    
+    def lambda_handler(event, context):
+        polly_message = event["Records"][0]["Sns"]["Message"]
+        print (polly_message)
+        polly_response = json.loads(polly_message)
+    
+        # Updating the item in DynamoDB
+        dynamodb = boto3.resource('dynamodb')
+        table = dynamodb.Table(os.environ['DB_TABLE_NAME'])
+    
+        response = table.update_item(
+            Key={
+                'id': polly_response["taskId"]
+            },
+            UpdateExpression="set pollyStatus = :s",
+            ExpressionAttributeValues={
+                ':s': polly_response['taskStatus']
+            }
+        )
+        
+        print(response)
+        
+        s3 = boto3.client('s3')
+        s3.put_object_acl(
+            ACL = 'public-read',
+            Bucket = os.environ['BUCKET_NAME'],
+            Key = polly_response["taskId"] + ".mp3"
+        )
+        
+        return
+    ```
+8. 사전에 닫힌 template.yaml 파일을 클릭하여 열고,  UpdateNews  함수 설정이 추가되는 것을 확인합니다. 그리고, 아래의 SAM 코드로 대체하고 Deploy를 진행합니다.
+![](images/image2018-10-23_9-53-6.png)
+**CoverAudio Template**
+    ``` yaml
+    Resources:
+    ...
+    UpdateNews:
+        Type: 'AWS::Serverless::Function'
+        Properties:
+        CodeUri: UpdateNews
+        Description: Update News via Amazon SNS
+        Tracing: Active
+        Events:
+            ConvertResource:
+            Type: SNS
+            Properties:
+                Topic:
+                Ref: NewsTopic
+        Policies:
+            - Version: '2012-10-17'
+            Statement:
+                - Effect: Allow
+                Action:
+                    - 'logs:PutLogEvents'
+                    - 'logs:CreateLogStream'
+                    - 'dynamodb:UpdateItem'
+                    - 's3:PutObjectAcl'
+                Resource: '*'
+    ````
+#### 5."GetNews" Lambda 함수 생성 ####
+1. 먼저 화면에 열려 있는 template.yaml 파일을 닫고, PostNews와 UpdateNews 함수처럼 **GetNews** 함수를 생성합니다.
+![](images/image2018-10-23_9-57-20.png)
+2. 코드는 다음을 참고합니다. 해당 함수는 DynamoDB에서 데이터를 가져오는 로직이 들어 있습니다. 코드 12번째 라인에 x자 표시가 나타나지만 무시하셔도 됩니다.
+![](images/image2018-10-23_10-2-9.png)
+**GetNews**
+    ``` python
+    from __future__ import print_function
+    
+    import boto3
+    import os
+    import json
+    import decimal
+    from boto3.dynamodb.conditions import Key, Attr
+    
+    # https://docs.aws.amazon.com/ko_kr/amazondynamodb/latest/developerguide/GettingStarted.Python.04.html
+    # Helper class to convert a DynamoDB item to JSON.
+    class DecimalEncoder(json.JSONEncoder):
+        def default(self, o):
+            if isinstance(o, decimal.Decimal):
+                if o % 1 > 0:
+                    return float(o)
+                else:
+                    return int(o)
+            return super(DecimalEncoder, self).default(o)
+    
+    def lambda_handler(event, context):
+        if "queryStringParameters" in event:
+            parmas = event['queryStringParameters']
+        print (parmas)
+        
+        postId = parmas["postId"]
+        dynamodb = boto3.resource('dynamodb')
+        table = dynamodb.Table(os.environ['DB_TABLE_NAME'])
+    
+        if postId == "*":
+            items = table.scan()
+        else:
+            items = table.query(KeyConditionExpression=Key('id').eq(postId))
+            
+        response = {
+            'statusCode': 200,
+            'body': json.dumps(items["Items"], cls=DecimalEncoder),
+            'headers': {
+                'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*'
+            }
+        }
+    
+        return response
+    ```
+3. SAM 템플릿을  GetNews  함수에 맞게 기존 설정을 지우고 아래와 같이 추가하고 저장한 후, Deploy를 수행합니다.
+   
+    **GetNews Template**
+    ``` yaml
+    Resources:
+    ...
+    GetNews:
+        Type: 'AWS::Serverless::Function'
+        Properties:
+        CodeUri: GetNews
+        Description: Gather information from Ajax calls from web pages
+        Tracing: Active
+        Events:
+            GetNewsApi:
+            Type: Api
+            Properties:
+                Path: /news
+                Method: GET
+        Policies:
+            - Version: '2012-10-17'
+            Statement:
+                - Effect: Allow
+                Action:
+                    - 'logs:PutLogEvents'
+                    - 'logs:CreateLogStream'
+                    - 'dynamodb:Query'
+                    - 'dynamodb:Scan'
+                Resource: '*'
+    ```
+#### 6. "DeleteNews" Lambda 함수 생성 ####
+1. template.yaml 파일을 닫고, 마지막으로 **DeleteNews** 함수를 생성합니다.
+![](images/image2018-10-23_10-4-50.png)
+2. 코드는 다음을 참고합니다. 해당 함수는 postId 값을 확인한 후에, dynamoDB에 등록된 정보와 생성된 MP3를 삭제하는 로직이 들어가 있습니다.
+![](images/image2018-10-23_10-6-42.png)
+**DeleteNews**
+    ``` python
+    from __future__ import print_function
+    
+    import boto3
+    import os
+    import json
+    from boto3.dynamodb.conditions import Key, Attr
+    
+    def lambda_handler(event, context):
+        if "body" in event:
+            params = json.loads(event['body'])
+        print (params)
+        
+        # Bad Request
+        if params["postId"] is None or params["postId"] == "":
+            response = {
+                'statusCode': 400,
+                'body': json.dumps({'message': "An unknown error has occurred. Missing required parameters."}),
+                'headers': {
+                    'Content-Type': 'application/json',
+                    'Access-Control-Allow-Origin': '*'
+                }
+            }
+            return response
+        
+        postId = params["postId"]
+        dynamodb = boto3.resource('dynamodb')
+        table = dynamodb.Table(os.environ['DB_TABLE_NAME'])
+        table.delete_item(Key={"id":postId})
+        
+        s3 = boto3.client('s3')
+        s3.delete_object(Bucket=os.environ['BUCKET_NAME'], Key= postId + ".mp3")
+    
+        response = {
+            'statusCode': 200,
+            'body': json.dumps({'message': "item is deleted : " + postId}),
+            'headers': {
+                'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*'
+            }
+        }
+        
+        return response
+    ```
+3. **DeleteNews**를 위해서 SAM 템플릿을 아래와 같이 추가합니다. SAM 템플릿을 수정 저장한 후에는 **반드시 Deploy**를 해서 정상적으로 템플릿이 배포가 되었는지 확인을 합니다.
+![](images/image2018-10-23_10-9-13.png)
+**DeleteNews Template**
+    ``` yaml
+    Resources:
+    ...
+    DeleteNews:
+        Type: 'AWS::Serverless::Function'
+        Properties:
+        CodeUri: DeleteNews
+        Description: Delete news item in DynamoDB Table and mp3 file in S3 bucket.
+        Tracing: Active
+        Events:
+            DeleteNewsApi:
+            Type: Api
+            Properties:
+                Path: /news
+                Method: DELETE
+        Policies:
+            - Version: '2012-10-17'
+            Statement:
+                - Effect: Allow
+                Action:
+                    - 'logs:PutLogEvents'
+                    - 'logs:CreateLogStream'
+                    - 'dynamodb:DeleteItem'
+                    - 's3:DeleteObject'
+                Resource: '*'
+    ```
+    1. 삭제 이벤트에 대해서 DynamoDB의 항목을 삭제하기 위해서  **dynamodb:DeleteItem** 정책과 S3에 생성된 MP3 파일을 삭제하기 위해서  **s3:DeleteObject** 정책을 추가합니다.
+
+#### 7. SAM에서의 Outputs 설정 ####
+1. SAM 템플릿에서 생성된 리소스를 확인하기 위해서 CloudFormation의 Stack 상세에서 Outputs으로 출력을 만들 수 있습니다. 여기서는 3개의 출력물을 생성합니다. 
+![](images/image2018-10-23_10-11-5.png)
+**Template_Outpuit**
+    ``` yaml
+    Outputs:
+    S3WebBucket:
+        Description: S3 Bucket Name for web hosting
+        Value:
+        Ref: StaticWebBucket
+    WebsiteURL:
+        Description: Name of S3 bucket to hold website content
+        Value:
+        'Fn::Join':
+            - ''
+            - - 'https://'
+            - 'Fn::GetAtt':
+                - StaticWebBucket
+                - DomainName
+            - '/index.html'
+    APIEndpointURL:
+        Description: URL of your API endpoint
+        Value:
+        'Fn::Sub': >-
+            https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/news
+    ```
+   1. **S3WebBucket**: 정적 웹 호스팅을 하는 S3 버킷 이름
+   2. **WebsiteURL**: 정적 웹 호스팅에 접속하기 위한 URL 정보, 정적 웹 호스팅을 하기 위한 정적 컨텐츠 파일은 추후 업로드 합니다.(html, css, js)
+   3. **APIEndpointURL**: 동적 API를 활용하기 위한 API Gateway가 배포한 Endpoint URL 정보
+
+#### 8. SAM에서의 CORS 설정 ####
+1.S3에서 제공하는 정적 웹 호스팅을 하는 버킷에서 제공하는 URL의 도메인과 API Gateway 에서 배포한 API Endpoint URL의 도메인은 서로 상이합니다. 따라서 브라우저에서 발생하는 보안 이슈를 해결하기 위해서는 CORS 설정을 해야합니다. 이 설정 역시 SAM에 모든 API Gateway에 추가할 수 있습니다. 따라서 Globals에 API 영역에 다음과 같이 추가합니다. SAM 템플릿을 수정 저장한 후에는 **반드시 Deploy**를 해서 정상적으로 템플릿이 배포가 되었는지 확인을 합니다.
+![](images/image2018-10-23_10-13-19.png)
+**Template_API_CORS**
+``` yaml
+Globals:
+...
+  Api:
+    Cors:
+      AllowMethods: "'*'"
+      AllowHeaders: "'*'"
+      AllowOrigin: "'*'"
 ```
+지금까지의 SAM을 정리하면 다음과 같습니다.
+
+**Final SAM**
+``` yaml
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: 'AWS::Serverless-2016-10-31'
+Description: >-
+  Building Serverless development environment and CI/CD process for DevOps based on Cloud9
+   
+Globals:
+   
+  Function:
+    Runtime: python2.7
+    Handler: lambda_function.lambda_handler
+    MemorySize: 128
+    Timeout: 60
+    Environment:
+      Variables:
+        DB_TABLE_NAME:
+          Ref: NewsTable
+        SNS_TOPIC:
+          Ref: NewsTopic
+        BUCKET_NAME:
+          Ref: PollyMp3Bucket
+   
+  Api:
+    Cors:
+      AllowMethods: "'*'"
+      AllowHeaders: "'*'"
+      AllowOrigin: "'*'"
+ 
+Resources:
+   
+  NewsTable:
+    Type: 'AWS::Serverless::SimpleTable'
+    Properties:
+      PrimaryKey:
+        Name: id
+        Type: String
+      ProvisionedThroughput:
+        ReadCapacityUnits: 5
+        WriteCapacityUnits: 5
+   
+  NewsTopic:
+    Type: 'AWS::SNS::Topic'
+    Properties:
+      DisplayName: NewsTopic
+   
+  PollyMp3Bucket:
+    Type: 'AWS::S3::Bucket'
+   
+  StaticWebBucket:
+    Type: 'AWS::S3::Bucket'
+    Properties:
+      AccessControl: PublicRead
+      WebsiteConfiguration:
+        IndexDocument: index.html
+        ErrorDocument: error.html
+   
+  PostNews:
+    Type: 'AWS::Serverless::Function'
+    Properties:
+      CodeUri: PostNews
+      Description: Post news text to convert from text to speech
+      Tracing: Active
+      Events:
+        PostNewsApi:
+          Type: Api
+          Properties:
+            Path: /news
+            Method: POST
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - 'logs:PutLogEvents'
+                - 'logs:CreateLogStream'
+                - 's3:PutObject'
+                - 'sns:Publish'
+                - 'dynamodb:PutItem'
+                - 'polly:StartSpeechSynthesisTask'
+              Resource: '*'
+   
+  UpdateNews:
+    Type: 'AWS::Serverless::Function'
+    Properties:
+      CodeUri: UpdateNews
+      Description: Update News via Amazon SNS
+      Tracing: Active
+      Events:
+        ConvertResource:
+          Type: SNS
+          Properties:
+            Topic:
+              Ref: NewsTopic
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - 'logs:PutLogEvents'
+                - 'logs:CreateLogStream'
+                - 'dynamodb:UpdateItem'
+                - 's3:PutObjectAcl'
+              Resource: '*'
+   
+  GetNews:
+    Type: 'AWS::Serverless::Function'
+    Properties:
+      CodeUri: GetNews
+      Description: Gather information from Ajax calls from web pages
+      Tracing: Active
+      Events:
+        GetNewsApi:
+          Type: Api
+          Properties:
+            Path: /news
+            Method: GET
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - 'logs:PutLogEvents'
+                - 'logs:CreateLogStream'
+                - 'dynamodb:Query'
+                - 'dynamodb:Scan'
+              Resource: '*'
+   
+  DeleteNews:
+    Type: 'AWS::Serverless::Function'
+    Properties:
+      CodeUri: DeleteNews
+      Description: Delete news item in DynamoDB Table and mp3 file in S3 bucket.
+      Tracing: Active
+      Events:
+        DeleteNewsApi:
+          Type: Api
+          Properties:
+            Path: /news
+            Method: DELETE
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - 'logs:PutLogEvents'
+                - 'logs:CreateLogStream'
+                - 'dynamodb:DeleteItem'
+                - 's3:DeleteObject'
+              Resource: '*'
+   
+Outputs:
+ 
+  S3WebBucket:
+    Description: S3 Bucket Name for web hosting
+    Value:
+      Ref: StaticWebBucket
+   
+  WebsiteURL:
+    Description: Name of S3 bucket to hold website content
+    Value:
+      'Fn::Join':
+        - ''
+        - - 'https://'
+          - 'Fn::GetAtt':
+              - StaticWebBucket
+              - DomainName
+          - '/index.html'
+     
+  APIEndpointURL:
+    Description: URL of your API endpoint
+    Value:
+      'Fn::Sub': >-
+        https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/news
+```
+#### 9. 정적 웹 호스팅을 위한 파일 업로드하기 ####
+1. 다음과 같이 정적 컨텐츠 파일을 다운로드 받습니다. Scripts.js 파일에 API Endpoint URL을 넣어주고, S3 버킷에 업로드 합니다. 순서는 아래와 같이 수행합니다.
+![](images/image2018-10-23_10-29-45.png)
+5번의 API_ENDPOINT는 하단의 CloudFormation 스택에서 확인 할 수 있습니다.
+2. 정적 웹 호스팅 파일 다운로드 받기 (Command Line Interface)
+    ``` sh
+    wget http://polly.awsdemokr.com/301_static_web.zip
+    ```
+3. 압축 풀고 폴더 이동 (Command Line Interface)
+    ``` sh
+    unzip 301_static_web.zip
+    cd 301_static_web
+    ```
+4. Cloud9에서 scripts.js 파일을 열고, CloudFormation Stack에 배포된 Output의  **APIEndpointURL** 값을  **scripts.js** 소스코드 첫 줄의  **API_ENDPOINT**에 반영 (WebsiteURL이 아니므로 주의)
+   
+    CloudFormation에 접속해서 Cloud9-WebApp 스택을 클릭합니다.
+    ![](images/image2018-10-23_10-19-12.png)
+
+    스택 상세 하단에 Outputs에 있는 리소스 2개(APIEndPointURL, S3WebBucket)를 확인합니다. 
+    ![](images/image2018-10-23_10-20-14.png)
+
+5. Cloud9에서 다운 받아서 압축을 해제한 scripts.js 파일을 열고 첫 줄을 수정하고 저장합니다.
+    ``` javascript
+    var API_ENDPOINT = "https://xxxxxxxxxx.execute-api.ap-southeast-1.amazonaws.com/Prod/news/";
+    if (API_ENDPOINT === "")
+    {
+            alert("scripts.js 파일의 상단에 API Gateway에 배포한 URL을 등록하고 실행하세요.");
+    }
+    ```
+6. 정적 웹 포스팅하고자 하는 S3 버킷에 public-read 권한으로 파일을 업로드 (CloudFormation Stack에 배포된 Output의  **S3WebBucket** 값을 아래에 대체)
+    ``` sh
+    aws s3 sync . s3://cloud9-webapp-staticwebbucket-xxxxxxxxxxxx --acl public-read
+    ```
+7. 웹 브라우저로 정적 웹 페이지에 접속합니다. CloudFormation Stack에 배포된 Output의 WebsiteURL 값을 클릭하면 바로 접속할 수 있습니다. 하단의 URL에 대한 형태를 기술해 놓았습니다.
+    1. <https://cloud9-webapp-staticwebbucket-xxxxxxxxxxxx.s3.amazonaws.com/index.html>
+   
+#### 10. 서비스 동작 테스트 ####
+1. **Chrome 웹 브라우저**를 통해서 CloudFormation의 Stack에서 제공하는 **WebsiteURL**로 접속합니다. 아래와 같은 사이트가 S3를 통해서 웹 호스팅 되는 것을 확인합니다. (Firefox에서는 해당 플러그인 설치 후 Enable 하여야 사용 가능합니다..)
+![](images/image2018-10-23_10-43-7.png)   
+   1. PostNews를 호출하기 위해서 음성으로 변환하고자 하는 텍스트를 입력합니다.
+       ```
+       안녕하세요. 서연입니다. 철수. 귀신.
+       ```
+   2. 음성 변환 시작 버튼을 클릭하여 텍스트를 음성으로 변환합니다.
+   3. 최초 Polly 작업을 요청한 상태는 scheduled  상태입니다.
+2. 시간이 지나면, 아래와 같이 상태가 COMPLETED 로 변경되는 것을 확인할 수 있습니다. MP3를 재생해 봅니다.
+![](images/image2018-10-23_10-45-55.png)
+   1. 아래 검색 버튼을 클릭하면 변환되는 Text를 음성으로 변경한 정보를 확인할 수 있습니다. MP3가 제작 되기 전이라면, 다시 한 번 검색 버튼을 클릭합니다.
+   2. 새롭게 만들어진 ID를 확인할 수 있습니다. 게시물 검색은 해당 ID를 이용할 수 있습니다. ElasticSearch를 이용하면, Text와 ID 정보를 등록하고 검색할 수 있게 서비스를 구축할 수 있습니다.
+3. 옵션을 조정해서 MP3를 만들 수 있습니다. 아래와 같이 정치적 기사는 SSML 옵션으로 음색과 음높이를 조절하여 텍스트에 적합한 목소리 형태로 변경할 수 있습니다. ConvertAudio 함수에 SSML 태그로 이루어진 것을 확인할 수 있습니다.
+![](images/chrome_2018-06-19_01-41-01.png)
+   1. 생성된 MP3를 재생하면서 옵션 변화에 따른 음성 변화를 확인할 수 있습니다.
+
+#### 11. SAM을 이용한 새로운 스택에 직접 배포 ####
+1. SAM은 코드 기반의 AWS의 서버리스 클라우드 인프라에 대한 템플릿을 생성한 결과물입니다. 즉, 해당 SAM을 이용하면 서비스 배포를 할 수 있습니다. 이 작업은 Command Line Interface에서 진행하겠습니다.
+![](images/image2018-10-23_10-53-43.png)
+2. 먼저 SAM 템플릿 배포를 위해서 S3 버킷을 하나 생성(예:  ***template-deploy-301***  <font color="red">**이름을 변경**</font> )합니다. 해당 S3 버킷에 패키지를 업로드 합니다. 
+    ``` sh
+    aws s3 mb s3://template-deploy-301
+    ```
+3. Cloud9 IDE 하단의  **~/ environment**  디렉토리에서 하단의 작업을 진행할 수 있습니다.
+    ``` sh
+    sam package --template-file WebApp/template.yaml --output-template-file webapp-output.yaml --s3-bucket template-deploy-301
+    ```
+    template-depoly-hyouk 버킷에는 배포에 필요한 아티팩트가 들어가 있습니다. 각 람다 함수별로 패키징된 임의의 파일들이 생성되는 것을 확인할 수 있습니다.
+    각각의 파일은 ZIP 파일로 바로 Lambda 함수에 배포할 수 있는 코드의 묶음입니다. 직접 다운로드 해서 unzip을 하면 확인할 수 있습니다.
+
+4. 다음과 같이  **WebAppTest**라는 새로운 스택으로 배포를 진행할 수 있습니다.  **webapp-outpuy.yaml**파일에는 Function의 CodeUri가 S3로 변경되어져 있는 것을 확인할 수 있습니다.
+    ``` sh
+    sam deploy --template-file /home/ec2-user/environment/webapp-output.yaml --stack-name WebAppTest --capabilities CAPABILITY_IAM
+    ```
+5. CloudFormation의 WebAppTest Stack으로 이동하여 정상 배포가 되는 것을 확인합니다.
+![](images/image2018-10-23_10-54-48.png)
+6. 이를 통해서 SAM을 재사용하는 방법과 서버리스 서비스를 CICD로 배포하기 위해 필요한 SAM 템플릿을 만드는 방법을 알아 보았습니다.
+7. **Lambda** 서비스로 이동하면, **Applications**에서 각각의 SAM 별로 리소스가 통합되어 관리가 되는 것을 확인할 수 있습니다.
+8. 해당 Lambda 함수의 실제 호출 시간을 모니터링 하기 위해서 SAM에 Tracing: Active 가 들어 있습니다. X-ray 서비스로 이동하여 서비스를 사용한 이력을 확인해 보세요.
+![](images/image2018-10-23_11-27-14.png)
+
+#### 12. 실습 자료 삭제 ####
+1. CloudFormation에서 배포되어 있는 Stack을 삭제합니다.
+   1. 11번에서 수동 배포한 Stack: WebAppTest
+   2. Cloud9 IDE에서 배포한 Stack: Cloud9-WebApp (만약 S3 버킷에 파일이 있을 경우, 삭제가 실패될 수 있습니다. S3 버킷을 Empty하시고 다시 삭제를 시도합니다.)
+   3. Cloud9 서비스로 이동한 후 해당 Cloud9을 삭제합니다.: aws-cloud9-NewWepApp 
+2. 삭제시 S3 버킷에 파일이 있을 경우, 삭제가 안될 수 있습니다. 관리 콘솔에서 S3 서비스로 이동한 다음 관련 버킷을 직접 삭제하시면 됩니다.
