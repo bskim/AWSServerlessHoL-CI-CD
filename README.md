@@ -191,17 +191,17 @@ Lab1은 Cloud9 IDE를 이용하여 서버리스 웹 애플리케이션을 구축
     Transform: 'AWS::Serverless-2016-10-31'
     Description: >-
       Building Serverless development environment and CI/CD process for DevOps based on Cloud9
-    
+
     Globals:
-    
+
       Function:
         Runtime: python2.7
         Handler: lambda_function.lambda_handler
         MemorySize: 128
         Timeout: 60
-    
+
     Resources:
-    
+
       PostNews:
         Type: 'AWS::Serverless::Function'
         Properties:
@@ -279,76 +279,76 @@ API Gateway가 가지는 속성 값으로 리소스에 대한 경로는 /news를
     AWSTemplateFormatVersion: '2010-09-09'
     Transform: 'AWS::Serverless-2016-10-31'
     Description: >-
-    Building Serverless development environment and CI/CD process for DevOps based on Cloud9
+      Building Serverless development environment and CI/CD process for DevOps based on Cloud9
 
     Globals:
 
-    Function:
+      Function:
         Runtime: python2.7
         Handler: lambda_function.lambda_handler
         MemorySize: 128
         Timeout: 60
         Environment:
-        Variables:
+          Variables:
             DB_TABLE_NAME:
-            Ref: NewsTable
+              Ref: NewsTable
             SNS_TOPIC:
-            Ref: NewsTopic
+              Ref: NewsTopic
             BUCKET_NAME:
-            Ref: PollyMp3Bucket
+              Ref: PollyMp3Bucket
 
     Resources:
 
-    NewsTable:
+      NewsTable:
         Type: 'AWS::Serverless::SimpleTable'
         Properties:
-        PrimaryKey:
+          PrimaryKey:
             Name: id
             Type: String
-        ProvisionedThroughput:
+          ProvisionedThroughput:
             ReadCapacityUnits: 5
             WriteCapacityUnits: 5
 
-    NewsTopic:
+      NewsTopic:
         Type: 'AWS::SNS::Topic'
         Properties:
-        DisplayName: NewsTopic
+          DisplayName: NewsTopic
 
-    PollyMp3Bucket:
+      PollyMp3Bucket:
         Type: 'AWS::S3::Bucket'
 
-    StaticWebBucket:
+      StaticWebBucket:
         Type: 'AWS::S3::Bucket'
         Properties:
-        AccessControl: PublicRead
-        WebsiteConfiguration:
+          AccessControl: PublicRead
+          WebsiteConfiguration:
             IndexDocument: index.html
             ErrorDocument: error.html
 
-    PostNews:
+      PostNews:
         Type: 'AWS::Serverless::Function'
         Properties:
-        CodeUri: PostNews
-        Description: Post news text to convert from text to speech
-        Tracing: Active
-        Events:
+          CodeUri: PostNews
+          Description: Post news text to convert from text to speech
+          Tracing: Active
+          Events:
             PostNewsApi:
-            Type: Api
-            Properties:
+              Type: Api
+              Properties:
                 Path: /news
                 Method: POST
-        Policies:
+          Policies:
             - Version: '2012-10-17'
-            Statement:
+              Statement:
                 - Effect: Allow
-                Action:
+                  Action:
                     - 'logs:PutLogEvents'
                     - 'logs:CreateLogStream'
                     - 's3:PutObject'
                     - 'sns:Publish'
                     - 'dynamodb:PutItem'
                     - 'polly:StartSpeechSynthesisTask'
-                Resource: '*'
+                  Resource: '*'
     ```
 2. AWS 관리 콘솔에서 CloudFormation 서비스로 이동하면 다음과 같이 Stack을 확인할 수 있습니다.
 ![](images/image2018-10-23_9-41-42.png)
@@ -418,28 +418,28 @@ API Gateway가 가지는 속성 값으로 리소스에 대한 경로는 /news를
     ``` yaml
     Resources:
     ...
-    UpdateNews:
+      UpdateNews:
         Type: 'AWS::Serverless::Function'
         Properties:
-        CodeUri: UpdateNews
-        Description: Update News via Amazon SNS
-        Tracing: Active
-        Events:
+          CodeUri: UpdateNews
+          Description: Update News via Amazon SNS
+          Tracing: Active
+          Events:
             ConvertResource:
-            Type: SNS
-            Properties:
+              Type: SNS
+              Properties:
                 Topic:
-                Ref: NewsTopic
-        Policies:
+                  Ref: NewsTopic
+          Policies:
             - Version: '2012-10-17'
-            Statement:
+              Statement:
                 - Effect: Allow
-                Action:
+                  Action:
                     - 'logs:PutLogEvents'
                     - 'logs:CreateLogStream'
                     - 'dynamodb:UpdateItem'
                     - 's3:PutObjectAcl'
-                Resource: '*'
+                  Resource: '*'
     ````
 #### 5."GetNews" Lambda 함수 생성 ####
 1. 먼저 화면에 열려 있는 template.yaml 파일을 닫고, PostNews와 UpdateNews 함수처럼 **GetNews** 함수를 생성합니다.
@@ -498,28 +498,28 @@ API Gateway가 가지는 속성 값으로 리소스에 대한 경로는 /news를
     ``` yaml
     Resources:
     ...
-    GetNews:
+      GetNews:
         Type: 'AWS::Serverless::Function'
         Properties:
-        CodeUri: GetNews
-        Description: Gather information from Ajax calls from web pages
-        Tracing: Active
-        Events:
+          CodeUri: GetNews
+          Description: Gather information from Ajax calls from web pages
+          Tracing: Active
+          Events:
             GetNewsApi:
-            Type: Api
-            Properties:
+              Type: Api
+              Properties:
                 Path: /news
                 Method: GET
-        Policies:
+          Policies:
             - Version: '2012-10-17'
-            Statement:
+              Statement:
                 - Effect: Allow
-                Action:
+                  Action:
                     - 'logs:PutLogEvents'
                     - 'logs:CreateLogStream'
                     - 'dynamodb:Query'
                     - 'dynamodb:Scan'
-                Resource: '*'
+                  Resource: '*'
     ```
 #### 6. "DeleteNews" Lambda 함수 생성 ####
 1. template.yaml 파일을 닫고, 마지막으로 **DeleteNews** 함수를 생성합니다.
@@ -577,28 +577,28 @@ API Gateway가 가지는 속성 값으로 리소스에 대한 경로는 /news를
     ``` yaml
     Resources:
     ...
-    DeleteNews:
+      DeleteNews:
         Type: 'AWS::Serverless::Function'
         Properties:
-        CodeUri: DeleteNews
-        Description: Delete news item in DynamoDB Table and mp3 file in S3 bucket.
-        Tracing: Active
-        Events:
+          CodeUri: DeleteNews
+          Description: Delete news item in DynamoDB Table and mp3 file in S3 bucket.
+          Tracing: Active
+          Events:
             DeleteNewsApi:
-            Type: Api
-            Properties:
+              Type: Api
+              Properties:
                 Path: /news
                 Method: DELETE
-        Policies:
+          Policies:
             - Version: '2012-10-17'
-            Statement:
+              Statement:
                 - Effect: Allow
-                Action:
+                  Action:
                     - 'logs:PutLogEvents'
                     - 'logs:CreateLogStream'
                     - 'dynamodb:DeleteItem'
                     - 's3:DeleteObject'
-                Resource: '*'
+                  Resource: '*'
     ```
     1. 삭제 이벤트에 대해서 DynamoDB의 항목을 삭제하기 위해서  **dynamodb:DeleteItem** 정책과 S3에 생성된 MP3 파일을 삭제하기 위해서  **s3:DeleteObject** 정책을 추가합니다.
 
@@ -608,24 +608,24 @@ API Gateway가 가지는 속성 값으로 리소스에 대한 경로는 /news를
 **Template_Outpuit**
     ``` yaml
     Outputs:
-    S3WebBucket:
+      S3WebBucket:
         Description: S3 Bucket Name for web hosting
         Value:
-        Ref: StaticWebBucket
-    WebsiteURL:
+          Ref: StaticWebBucket
+      WebsiteURL:
         Description: Name of S3 bucket to hold website content
         Value:
-        'Fn::Join':
+          'Fn::Join':
             - ''
             - - 'https://'
-            - 'Fn::GetAtt':
+              - 'Fn::GetAtt':
                 - StaticWebBucket
                 - DomainName
-            - '/index.html'
-    APIEndpointURL:
+              - '/index.html'
+      APIEndpointURL:
         Description: URL of your API endpoint
         Value:
-        'Fn::Sub': >-
+          'Fn::Sub': >-
             https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/news
     ```
    1. **S3WebBucket**: 정적 웹 호스팅을 하는 S3 버킷 이름
@@ -886,7 +886,7 @@ Outputs:
     ``` sh
     sam package --template-file WebApp/template.yaml --output-template-file webapp-output.yaml --s3-bucket template-deploy-301
     ```
-    template-depoly-hyouk 버킷에는 배포에 필요한 아티팩트가 들어가 있습니다. 각 람다 함수별로 패키징된 임의의 파일들이 생성되는 것을 확인할 수 있습니다.
+    template-depoly-301 버킷에는 배포에 필요한 아티팩트가 들어가 있습니다. 각 람다 함수별로 패키징된 임의의 파일들이 생성되는 것을 확인할 수 있습니다.
     각각의 파일은 ZIP 파일로 바로 Lambda 함수에 배포할 수 있는 코드의 묶음입니다. 직접 다운로드 해서 unzip을 하면 확인할 수 있습니다.
 
 4. 다음과 같이  **WebAppTest**라는 새로운 스택으로 배포를 진행할 수 있습니다.  **webapp-outpuy.yaml**파일에는 Function의 CodeUri가 S3로 변경되어져 있는 것을 확인할 수 있습니다.
