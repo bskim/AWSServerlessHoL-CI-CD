@@ -1154,7 +1154,7 @@ CodeStarWoker-webappcodestar-CloudFormation Role을 선택하고  **Permissions*
 1. 카나리 배포는 다음과 같이 Deploy 단계의 스택에서 확인할 수 있습니다.
 ![](images/234_CodeStar_Cloudformation_stack.png)
 
-2. Events에 보면 Canary 배포를 위해서 진행 상태라는 것을 볼 수 있습니다. 뒷쪽에 있는  **CodeDeploy deployment started** 를 클릭합니다.링크가 동작하지 않을 경우 CodeDeploy 화면으로 가셔서 해당 Deployment ID를 확인합니다. 
+2. Events에 보면 Canary 배포를 위해서 진행 상태라는 것을 볼 수 있습니다. 뒷쪽에 있는  **CodeDeploy deployment started** 를 클릭합니다.링크가 생성되지 않았을 경우 콘솔에서  CodeDeploy 화면으로 가셔서 해당 Deployment ID를 클릭하여 확인합니다. 
 ![](images/235_CodeStar_CodeDeploy.png)
 
 3. CodeDeploy 화면으로 전환되고 현재 Carnary 배포로 원래 버전 90%, 새 버전 10%로 진행되고 있는 것을 확인할 수 있습니다. 5분이 흐르면 새 버전으로 트래픽이 모두 넘어가는 것을 볼 수 있습니다. 해당 단계에서 실제 API를 호출해서 트래픽이 9:1로 나오는지 확인 할 수 있습니다.
